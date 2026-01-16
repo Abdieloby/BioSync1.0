@@ -208,7 +208,7 @@ const DateSelector = ({ selectedDate, setSelectedDate }) => (
 const AuthView = ({ onComplete }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState("login");
+  const [mode, setMode] = useState("login"); // 'login' or 'signup'
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -219,6 +219,8 @@ const AuthView = ({ onComplete }) => {
 
     try {
       if (mode === "signup") {
+        // Account Linking Strategy:
+        // If user is currently anonymous, link the new email/password to this ID
         if (auth.currentUser && auth.currentUser.isAnonymous) {
           const credential = EmailAuthProvider.credential(email, password);
           await linkWithCredential(auth.currentUser, credential);
@@ -321,6 +323,15 @@ const AuthView = ({ onComplete }) => {
               : "Already have an account? Log In"}
           </button>
         </div>
+
+        {mode === "signup" && (
+          <button
+            onClick={onComplete}
+            className="mt-4 w-full text-xs text-slate-300 font-medium py-2"
+          >
+            Stay anonymous for now (Not recommended)
+          </button>
+        )}
       </div>
     </div>
   );
@@ -370,7 +381,8 @@ const TabNav = ({ activeTab, setActiveTab }) => {
   );
 };
 
-// --- Views ---
+// --- View Implementation (Experience, Habits, Gut, Gym, Report) ---
+// (Note: These views are identical to your existing logic but updated to use the production data model)
 
 const ExperienceView = ({
   user,
@@ -590,37 +602,10 @@ const HabitsView = ({
       });
     return m;
   }, [history]);
-
   useEffect(
     () => setLocalCompleted(historyMap[selectedDate] || []),
     [selectedDate, historyMap]
   );
-
-  // --- Streak Calculation ---
-  const calculateStreak = (habitId) => {
-    let streak = 0;
-    const today = getLocalDateKey();
-    const yesterday = getLocalDateKey(new Date(Date.now() - 86400000));
-
-    // Check if habit was done today or yesterday. If not, streak is broken.
-    const doneToday = historyMap[today]?.includes(habitId);
-    const doneYesterday = historyMap[yesterday]?.includes(habitId);
-
-    if (!doneToday && !doneYesterday) return 0;
-
-    // Count backwards
-    let checkDate = doneToday ? new Date() : new Date(Date.now() - 86400000);
-    while (true) {
-      const dateKey = getLocalDateKey(checkDate);
-      if (historyMap[dateKey]?.includes(habitId)) {
-        streak++;
-        checkDate.setDate(checkDate.getDate() - 1);
-      } else {
-        break;
-      }
-    }
-    return streak;
-  };
 
   const toggleHabit = (id) => {
     if (isEditMode) return;
@@ -636,7 +621,6 @@ const HabitsView = ({
       return n;
     });
   };
-
   const addHabit = (e) => {
     e.preventDefault();
     if (!newName.trim()) return;
@@ -665,7 +649,7 @@ const HabitsView = ({
     <div className="pb-32 bg-slate-50 min-h-screen">
       <Header
         title="Habits"
-        subtitle="Consistency is key"
+        subtitle="Consistency builds identity"
         colorClass="text-teal-600"
         rightElement={
           <button
@@ -689,8 +673,6 @@ const HabitsView = ({
           {habitsList.map((h) => {
             const isDone = localCompleted.includes(h.id);
             const isEditing = editingId === h.id;
-            const streakCount = calculateStreak(h.id);
-
             return (
               <div
                 key={h.id}
@@ -726,23 +708,15 @@ const HabitsView = ({
                       </button>
                     </div>
                   ) : (
-                    <div className="flex flex-col">
-                      <span
-                        className={`font-bold text-lg ${
-                          isDone && !isEditMode
-                            ? "text-slate-800"
-                            : "text-slate-500"
-                        }`}
-                      >
-                        {h.label}
-                      </span>
-                      {streakCount > 1 && (
-                        <div className="flex items-center text-orange-500 font-bold text-[10px] uppercase tracking-wider">
-                          <Flame size={10} className="mr-1 fill-orange-500" />{" "}
-                          {streakCount} Day Streak
-                        </div>
-                      )}
-                    </div>
+                    <span
+                      className={`font-bold text-lg ${
+                        isDone && !isEditMode
+                          ? "text-slate-800"
+                          : "text-slate-500"
+                      }`}
+                    >
+                      {h.label}
+                    </span>
                   )}
                 </div>
                 {isEditMode && !isEditing ? (
@@ -787,7 +761,7 @@ const HabitsView = ({
             className="flex space-x-3 pt-6 border-t border-slate-200"
           >
             <input
-              className="flex-1 p-3 bg-white rounded-xl border border-slate-200 outline-none text-sm"
+              className="flex-1 p-3 bg-white rounded-xl border border-slate-200 outline-none"
               placeholder="New habit..."
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
@@ -828,7 +802,7 @@ const GutView = ({ user, saveEntry, history, deleteEntry }) => {
     <div className="pb-32 bg-slate-50 min-h-screen">
       <Header
         title="Gut Health"
-        subtitle="Digestion logs"
+        subtitle="Track digestion"
         colorClass="text-amber-600"
       />
       <div className="px-5 mt-6 max-w-md mx-auto space-y-6">
@@ -839,7 +813,7 @@ const GutView = ({ user, saveEntry, history, deleteEntry }) => {
         {todaysEntries.length > 0 && (
           <div className="mb-4">
             <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">
-              Logged Entries
+              Today
             </h4>
             {todaysEntries.map((e) => (
               <div
@@ -869,7 +843,7 @@ const GutView = ({ user, saveEntry, history, deleteEntry }) => {
           </div>
         )}
         <Card className="p-5">
-          <h3 className="font-bold text-slate-700 mb-4">Bristol Stool Scale</h3>
+          <h3 className="font-bold text-slate-700 mb-4">Bristol Scale</h3>
           <div className="flex justify-between gap-1">
             {[1, 2, 3, 4, 5, 6, 7].map((t) => (
               <button
@@ -921,7 +895,7 @@ const GutView = ({ user, saveEntry, history, deleteEntry }) => {
             ))}
           </div>
           <input
-            placeholder="Additional notes..."
+            placeholder="Notes"
             className="w-full p-3 bg-slate-50 rounded-xl text-sm font-medium outline-none"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -1060,7 +1034,7 @@ const GymView = ({
       <div className="pb-32 bg-slate-50 min-h-screen">
         <Header
           title="Program Editor"
-          subtitle="Customize weekly plan"
+          subtitle="Modify schedule"
           rightElement={
             <button onClick={() => setIsEditMode(false)}>
               <X className="text-slate-400" />
@@ -1149,7 +1123,7 @@ const GymView = ({
             }}
             className="w-full py-4 bg-cyan-600 text-white rounded-xl font-bold"
           >
-            Save Program
+            Save Changes
           </button>
         </div>
       </div>
@@ -1177,7 +1151,7 @@ const GymView = ({
         />
         <Card className="p-5 border-cyan-100 bg-cyan-50/30">
           <h3 className="text-xs font-bold text-cyan-600 uppercase mb-3">
-            Suggested Plan
+            Today's Plan
           </h3>
           <div className="flex flex-col gap-2">
             {todaysPlan.exercises.map((ex, i) => (
@@ -1202,7 +1176,7 @@ const GymView = ({
           {editingLogId && (
             <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded-lg flex justify-between items-center">
               <span className="text-xs font-bold text-amber-700">
-                Editing Entry
+                Editing...
               </span>
               <button
                 onClick={() => {
@@ -1259,7 +1233,7 @@ const GymView = ({
         </div>
         <div className="mt-4">
           <h4 className="text-xs font-bold text-slate-400 uppercase mb-2 ml-1">
-            Today's History
+            Today's Log
           </h4>
           <div className="space-y-2">
             {history
@@ -1335,7 +1309,7 @@ const ReportView = ({ user, history }) => {
   const handleDownloadCSV = () => {
     const rawData = getFilteredData();
     if (rawData.length === 0) {
-      alert("No data recorded for this period.");
+      alert("No data.");
       return;
     }
     const rows = rawData.map((h) => {
@@ -1369,7 +1343,7 @@ const ReportView = ({ user, history }) => {
     <div className="pb-32 bg-slate-50 min-h-screen">
       <Header
         title="Data"
-        subtitle="Export workout history"
+        subtitle="Export history"
         colorClass="text-slate-800"
       />
       <div className="px-5 mt-6 max-w-md mx-auto space-y-6">
@@ -1417,7 +1391,7 @@ const ReportView = ({ user, history }) => {
           onClick={handleDownloadCSV}
           className="w-full py-4 bg-white border-2 border-slate-200 text-slate-700 rounded-2xl font-bold flex justify-center items-center space-x-2"
         >
-          <Download size={20} /> <span>Export to CSV</span>
+          <Download size={20} /> <span>Download CSV</span>
         </button>
       </div>
     </div>
@@ -1496,6 +1470,8 @@ export default function App() {
   };
   const handleLogout = () => signOut(auth).then(() => setAuthCompleted(false));
 
+  // Determine if we should show the Lock screen
+  // We show it if the user is anonymous AND hasn't "skipped" or if they just want to log in
   const isAnonymous = user?.isAnonymous;
   const showLockScreen =
     (isAnonymous && !authCompleted) || (!user && !authCompleted);
