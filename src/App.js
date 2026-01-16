@@ -13,7 +13,16 @@ import {
   getDoc,
   updateDoc,
 } from "firebase/firestore";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import {
+  getAuth,
+  signInAnonymously,
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  EmailAuthProvider,
+  linkWithCredential,
+  signOut,
+} from "firebase/auth";
 import {
   Activity,
   Brain,
@@ -43,6 +52,10 @@ import {
   Book,
   Plus,
   Check,
+  Lock,
+  LogOut,
+  Mail,
+  Key,
 } from "lucide-react";
 
 // --- YOUR FIREBASE CONFIGURATION ---
@@ -56,7 +69,6 @@ const firebaseConfig = {
 };
 // -----------------------------------
 
-// Initialize Firebase (Checks if app already exists to prevent errors)
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -69,7 +81,6 @@ const getLocalDateKey = (date = new Date()) => {
   return `${year}-${month}-${day}`;
 };
 
-// --- Defaults ---
 const DEFAULT_SCHEDULE = {
   0: {
     title: "Rest",
@@ -149,7 +160,7 @@ const GUT_TRIGGERS = [
   { label: "Late Night", icon: "🌙" },
 ];
 
-// --- Components ---
+// --- Shared Components ---
 const Card = ({ children, className = "" }) => (
   <div
     className={`bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden ${className}`}
@@ -193,6 +204,140 @@ const DateSelector = ({ selectedDate, setSelectedDate }) => (
   </div>
 );
 
+// --- Auth View ---
+const AuthView = ({ onComplete }) => {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [mode, setMode] = useState("login"); // 'login' or 'signup'
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleAuth = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      if (mode === "signup") {
+        // Account Linking Strategy:
+        // If user is currently anonymous, link the new email/password to this ID
+        if (auth.currentUser && auth.currentUser.isAnonymous) {
+          const credential = EmailAuthProvider.credential(email, password);
+          await linkWithCredential(auth.currentUser, credential);
+        } else {
+          await createUserWithEmailAndPassword(auth, email, password);
+        }
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+      onComplete?.();
+    } catch (err) {
+      setError(err.message.replace("Firebase:", ""));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-6">
+      <div className="w-full max-w-md bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
+        <div className="flex flex-col items-center mb-8">
+          <div className="p-4 bg-cyan-50 rounded-2xl mb-4">
+            <Lock className="text-cyan-600" size={32} />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-800">
+            {mode === "login" ? "Welcome Back" : "Secure Your Account"}
+          </h2>
+          <p className="text-slate-400 text-sm mt-1">
+            {mode === "login"
+              ? "Sign in to access your logs"
+              : "Existing data will be saved to your account"}
+          </p>
+        </div>
+
+        <form onSubmit={handleAuth} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">
+              Email Address
+            </label>
+            <div className="relative">
+              <Mail
+                className="absolute left-4 top-3.5 text-slate-300"
+                size={18}
+              />
+              <input
+                type="email"
+                required
+                placeholder="name@email.com"
+                className="w-full pl-12 p-3.5 bg-slate-50 rounded-xl outline-none focus:ring-2 focus:ring-cyan-100 font-medium"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">
+              Password
+            </label>
+            <div className="relative">
+              <Key
+                className="absolute left-4 top-3.5 text-slate-300"
+                size={18}
+              />
+              <input
+                type="password"
+                required
+                placeholder="••••••••"
+                className="w-full pl-12 p-3.5 bg-slate-50 rounded-xl outline-none focus:ring-2 focus:ring-cyan-100 font-medium"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {error && (
+            <p className="text-xs text-red-500 font-bold bg-red-50 p-3 rounded-lg">
+              {error}
+            </p>
+          )}
+
+          <button
+            disabled={loading}
+            className="w-full py-4 bg-cyan-600 text-white rounded-xl font-bold shadow-lg shadow-cyan-100 active:scale-95 transition-all"
+          >
+            {loading
+              ? "Processing..."
+              : mode === "login"
+              ? "Sign In"
+              : "Create Account"}
+          </button>
+        </form>
+
+        <div className="mt-8 text-center">
+          <button
+            onClick={() => setMode(mode === "login" ? "signup" : "login")}
+            className="text-sm font-bold text-cyan-600"
+          >
+            {mode === "login"
+              ? "Don't have a secure account? Sign Up"
+              : "Already have an account? Log In"}
+          </button>
+        </div>
+
+        {mode === "signup" && (
+          <button
+            onClick={onComplete}
+            className="mt-4 w-full text-xs text-slate-300 font-medium py-2"
+          >
+            Stay anonymous for now (Not recommended)
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// --- App Navigation ---
 const TabNav = ({ activeTab, setActiveTab }) => {
   const tabs = [
     { id: "experience", icon: Heart, label: "Mood" },
@@ -236,9 +381,16 @@ const TabNav = ({ activeTab, setActiveTab }) => {
   );
 };
 
-// --- Views ---
+// --- View Implementation (Experience, Habits, Gut, Gym, Report) ---
+// (Note: These views are identical to your existing logic but updated to use the production data model)
 
-const ExperienceView = ({ user, saveEntry, history, updateEntry }) => {
+const ExperienceView = ({
+  user,
+  saveEntry,
+  history,
+  updateEntry,
+  onLogout,
+}) => {
   const [selectedDate, setSelectedDate] = useState(getLocalDateKey());
   const [form, setForm] = useState({
     mood: null,
@@ -256,6 +408,7 @@ const ExperienceView = ({ user, saveEntry, history, updateEntry }) => {
       ),
     [history, selectedDate]
   );
+
   useEffect(() => {
     if (existingDaily)
       setForm((prev) => ({
@@ -311,8 +464,16 @@ const ExperienceView = ({ user, saveEntry, history, updateEntry }) => {
     <div className="pb-32 bg-slate-50 min-h-screen">
       <Header
         title="My Mind"
-        subtitle="Daily mental & digital check-in"
+        subtitle={user.email || "Guest User"}
         colorClass="text-rose-500"
+        rightElement={
+          <button
+            onClick={onLogout}
+            className="p-2 bg-slate-100 rounded-lg text-slate-400"
+          >
+            <LogOut size={18} />
+          </button>
+        }
       />
       <div className="px-5 mt-6 max-w-md mx-auto space-y-6">
         <DateSelector
@@ -537,7 +698,7 @@ const HabitsView = ({
                         value={editName}
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => setEditName(e.target.value)}
-                        className="flex-1 p-1 bg-slate-50 border rounded text-sm font-bold text-slate-800"
+                        className="flex-1 p-1 border rounded text-sm font-bold text-slate-800"
                       />
                       <button
                         onClick={saveEdit}
@@ -1237,22 +1398,21 @@ const ReportView = ({ user, history }) => {
   );
 };
 
-export default function BioSync() {
+export default function App() {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState("experience");
   const [history, setHistory] = useState([]);
   const [schedule, setSchedule] = useState(DEFAULT_SCHEDULE);
   const [habitsList, setHabitsList] = useState(DEFAULT_HABITS);
+  const [authCompleted, setAuthCompleted] = useState(false);
 
   useEffect(() => {
-    const initAuth = async () => {
-      if (typeof __initial_auth_token !== "undefined" && __initial_auth_token)
-        await signInWithCustomToken(auth, __initial_auth_token);
-      else await signInAnonymously(auth);
-    };
-    initAuth();
-    onAuthStateChanged(auth, setUser);
+    onAuthStateChanged(auth, (u) => {
+      if (!u) signInAnonymously(auth);
+      setUser(u);
+    });
   }, []);
+
   useEffect(() => {
     if (!user) return;
     const q = query(collection(db, "users", user.uid, "entries"));
@@ -1266,6 +1426,7 @@ export default function BioSync() {
       )
     );
   }, [user]);
+
   useEffect(() => {
     if (!user) return;
     getDoc(doc(db, "users", user.uid, "config", "weekly_schedule")).then(
@@ -1307,13 +1468,18 @@ export default function BioSync() {
       setHabitsList(l);
     }
   };
+  const handleLogout = () => signOut(auth).then(() => setAuthCompleted(false));
 
-  if (!user)
-    return (
-      <div className="flex h-screen items-center justify-center text-slate-400 font-bold">
-        Loading...
-      </div>
-    );
+  // Determine if we should show the Lock screen
+  // We show it if the user is anonymous AND hasn't "skipped" or if they just want to log in
+  const isAnonymous = user?.isAnonymous;
+  const showLockScreen =
+    (isAnonymous && !authCompleted) || (!user && !authCompleted);
+
+  if (showLockScreen) {
+    return <AuthView onComplete={() => setAuthCompleted(true)} />;
+  }
+
   return (
     <div className="font-sans text-slate-900">
       {activeTab === "experience" && (
@@ -1322,6 +1488,7 @@ export default function BioSync() {
           saveEntry={saveEntry}
           history={history}
           updateEntry={updateEntry}
+          onLogout={handleLogout}
         />
       )}
       {activeTab === "habits" && (
