@@ -58,7 +58,7 @@ import {
   Key,
   Send,
   Sparkles,
-  Camera
+  Camera,
 } from "lucide-react";
 
 // --- YOUR FIREBASE CONFIGURATION ---
@@ -75,7 +75,7 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
-const apiKey = ""; // Execution environment provides this
+const apiKey = "AIzaSyDUE78vt1lD_vEa1Esu9-iuzx1swTTLNBE"; // Execution environment provides this
 
 // --- Utilities ---
 const getLocalDateKey = (date = new Date()) => {
@@ -357,7 +357,7 @@ const TabNav = ({ activeTab, setActiveTab }) => {
               }`}
             >
               <tab.icon
-                size={tab.id === 'ai' ? 28 : 22}
+                size={tab.id === "ai" ? 28 : 22}
                 strokeWidth={activeTab === tab.id ? 2.5 : 2}
               />
             </div>
@@ -377,114 +377,184 @@ const TabNav = ({ activeTab, setActiveTab }) => {
 
 // --- AI Coach View ---
 const AICoachView = ({ history, saveEntry }) => {
-    const [messages, setMessages] = useState([{ role: 'assistant', content: 'BioSync Neural Engine Online. How can I help with your training, gut protocol, or screenshots today?' }]);
-    const [input, setInput] = useState('');
-    const [image, setImage] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const fileRef = useRef(null);
-    const endRef = useRef(null);
+  const [messages, setMessages] = useState([
+    {
+      role: "assistant",
+      content:
+        "BioSync Neural Engine Online. How can I help with your training, gut protocol, or screenshots today?",
+    },
+  ]);
+  const [input, setInput] = useState("");
+  const [image, setImage] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const fileRef = useRef(null);
+  const endRef = useRef(null);
 
-    useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-    const callGemini = async (queryText, base64Image) => {
-        const recentLogs = history.slice(0, 30).map(h => ({ type: h.type, details: JSON.stringify(h.data) }));
-        const systemPrompt = `You are the BioSync Health Intelligence Coach. 
+  const callGemini = async (queryText, base64Image) => {
+    const recentLogs = history
+      .slice(0, 30)
+      .map((h) => ({ type: h.type, details: JSON.stringify(h.data) }));
+    const systemPrompt = `You are the BioSync Health Intelligence Coach. 
         Focus: IBS recovery, progressive gym training, and bloodwork analysis.
         Logs Context: ${JSON.stringify(recentLogs)}
         Instructions: Be action-oriented. If an image is provided, extract data.
         If analysis results in loggable data, respond with ACTION_SAVE: { "type": "CATEGORY", "data": { ... } } at the end.`;
 
-        const payload = {
-            contents: [{ 
-                parts: [
-                    { text: queryText || "Analyze this screenshot." },
-                    ...(base64Image ? [{ inlineData: { mimeType: "image/png", data: base64Image } }] : [])
-                ] 
-            }],
-            systemInstruction: { parts: [{ text: systemPrompt }] }
-        };
-
-        try {
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const data = await response.json();
-            return data.candidates?.[0]?.content?.parts?.[0]?.text;
-        } catch (err) {
-            return "Connection error. Please check API settings.";
-        }
+    const payload = {
+      contents: [
+        {
+          parts: [
+            { text: queryText || "Analyze this screenshot." },
+            ...(base64Image
+              ? [{ inlineData: { mimeType: "image/png", data: base64Image } }]
+              : []),
+          ],
+        },
+      ],
+      systemInstruction: { parts: [{ text: systemPrompt }] },
     };
 
-    const handleSend = async () => {
-        if ((!input.trim() && !image) || loading) return;
-        
-        const userMsg = { role: 'user', content: input || "Uploaded a screenshot", hasImage: !!image };
-        setMessages(prev => [...prev, userMsg]);
-        setLoading(true);
-        
-        const currentImg = image;
-        const currentInput = input;
-        setInput('');
-        setImage(null);
-
-        const res = await callGemini(currentInput, currentImg);
-        
-        if (res.includes("ACTION_SAVE:")) {
-            try {
-                const parts = res.split("ACTION_SAVE:");
-                const jsonStr = parts[1].trim();
-                const json = JSON.parse(jsonStr);
-                await saveEntry(json.type, { ...json.data, timestamp: new Date().toISOString(), targetDate: getLocalDateKey() });
-            } catch (e) { console.warn("Auto-log failed", e); }
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
         }
+      );
+      const data = await response.json();
+      return data.candidates?.[0]?.content?.parts?.[0]?.text;
+    } catch (err) {
+      return "Connection error. Please check API settings.";
+    }
+  };
 
-        setMessages(prev => [...prev, { role: 'assistant', content: res.replace(/ACTION_SAVE:.*(\n|$)/g, '').trim() }]);
-        setLoading(false);
+  const handleSend = async () => {
+    if ((!input.trim() && !image) || loading) return;
+
+    const userMsg = {
+      role: "user",
+      content: input || "Uploaded a screenshot",
+      hasImage: !!image,
     };
+    setMessages((prev) => [...prev, userMsg]);
+    setLoading(true);
 
-    return (
-        <div className="pb-40 bg-slate-50 min-h-screen flex flex-col">
-            <Header title="Intelligence" subtitle="AI Health Coach" colorClass="text-cyan-600" />
-            <div className="flex-1 overflow-y-auto px-5 py-6 space-y-4">
-                {messages.map((m, i) => (
-                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[85%] p-4 rounded-2xl text-sm font-medium ${m.role === 'user' ? 'bg-cyan-600 text-white rounded-tr-none' : 'bg-white text-slate-700 border border-slate-100 rounded-tl-none shadow-sm'}`}>
-                            {m.hasImage && <div className="mb-2 opacity-60 flex items-center gap-1 text-[10px]"><Camera size={10}/> Screenshot Attached</div>}
-                            <div className="whitespace-pre-wrap">{m.content}</div>
-                        </div>
-                    </div>
-                ))}
-                {loading && <div className="text-xs text-slate-400 font-bold animate-pulse px-2">Engine analyzing...</div>}
-                <div ref={endRef} />
+    const currentImg = image;
+    const currentInput = input;
+    setInput("");
+    setImage(null);
+
+    const res = await callGemini(currentInput, currentImg);
+
+    if (res.includes("ACTION_SAVE:")) {
+      try {
+        const parts = res.split("ACTION_SAVE:");
+        const jsonStr = parts[1].trim();
+        const json = JSON.parse(jsonStr);
+        await saveEntry(json.type, {
+          ...json.data,
+          timestamp: new Date().toISOString(),
+          targetDate: getLocalDateKey(),
+        });
+      } catch (e) {
+        console.warn("Auto-log failed", e);
+      }
+    }
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "assistant",
+        content: res.replace(/ACTION_SAVE:.*(\n|$)/g, "").trim(),
+      },
+    ]);
+    setLoading(false);
+  };
+
+  return (
+    <div className="pb-40 bg-slate-50 min-h-screen flex flex-col">
+      <Header
+        title="Intelligence"
+        subtitle="AI Health Coach"
+        colorClass="text-cyan-600"
+      />
+      <div className="flex-1 overflow-y-auto px-5 py-6 space-y-4">
+        {messages.map((m, i) => (
+          <div
+            key={i}
+            className={`flex ${
+              m.role === "user" ? "justify-end" : "justify-start"
+            }`}
+          >
+            <div
+              className={`max-w-[85%] p-4 rounded-2xl text-sm font-medium ${
+                m.role === "user"
+                  ? "bg-cyan-600 text-white rounded-tr-none"
+                  : "bg-white text-slate-700 border border-slate-100 rounded-tl-none shadow-sm"
+              }`}
+            >
+              {m.hasImage && (
+                <div className="mb-2 opacity-60 flex items-center gap-1 text-[10px]">
+                  <Camera size={10} /> Screenshot Attached
+                </div>
+              )}
+              <div className="whitespace-pre-wrap">{m.content}</div>
             </div>
-            
-            <div className="p-4 bg-white/80 backdrop-blur-md border-t fixed bottom-20 left-0 right-0 max-w-md mx-auto flex items-center gap-2 z-40">
-                <button onClick={() => fileRef.current.click()} className={`p-3 rounded-xl transition-all ${image ? 'bg-cyan-100 text-cyan-600' : 'bg-slate-100 text-slate-400'}`}>
-                    <Camera size={20}/>
-                </button>
-                <input type="file" ref={fileRef} className="hidden" accept="image/*" onChange={e => {
-                    const file = e.target.files[0];
-                    if (file) {
-                        const reader = new FileReader();
-                        reader.onload = () => setImage(reader.result.split(',')[1]);
-                        reader.readAsDataURL(file);
-                    }
-                }} />
-                <input 
-                    value={input} 
-                    onChange={e => setInput(e.target.value)} 
-                    onKeyPress={e => e.key === 'Enter' && handleSend()} 
-                    placeholder="Ask your coach..." 
-                    className="flex-1 bg-slate-50 p-3 rounded-xl outline-none text-sm font-medium" 
-                />
-                <button onClick={handleSend} className="p-3 bg-cyan-600 text-white rounded-xl shadow-lg shadow-cyan-100">
-                    <Send size={20}/>
-                </button>
-            </div>
-        </div>
-    );
+          </div>
+        ))}
+        {loading && (
+          <div className="text-xs text-slate-400 font-bold animate-pulse px-2">
+            Engine analyzing...
+          </div>
+        )}
+        <div ref={endRef} />
+      </div>
+
+      <div className="p-4 bg-white/80 backdrop-blur-md border-t fixed bottom-20 left-0 right-0 max-w-md mx-auto flex items-center gap-2 z-40">
+        <button
+          onClick={() => fileRef.current.click()}
+          className={`p-3 rounded-xl transition-all ${
+            image ? "bg-cyan-100 text-cyan-600" : "bg-slate-100 text-slate-400"
+          }`}
+        >
+          <Camera size={20} />
+        </button>
+        <input
+          type="file"
+          ref={fileRef}
+          className="hidden"
+          accept="image/*"
+          onChange={(e) => {
+            const file = e.target.files[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = () => setImage(reader.result.split(",")[1]);
+              reader.readAsDataURL(file);
+            }
+          }}
+        />
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyPress={(e) => e.key === "Enter" && handleSend()}
+          placeholder="Ask your coach..."
+          className="flex-1 bg-slate-50 p-3 rounded-xl outline-none text-sm font-medium"
+        />
+        <button
+          onClick={handleSend}
+          className="p-3 bg-cyan-600 text-white rounded-xl shadow-lg shadow-cyan-100"
+        >
+          <Send size={20} />
+        </button>
+      </div>
+    </div>
+  );
 };
 
 // --- Views ---
@@ -1640,7 +1710,7 @@ export default function App() {
         />
       )}
       {activeTab === "ai" && (
-          <AICoachView history={history} saveEntry={saveEntry} />
+        <AICoachView history={history} saveEntry={saveEntry} />
       )}
       {activeTab === "gut" && (
         <GutView
